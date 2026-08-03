@@ -24,6 +24,7 @@ dependencies = ["pydicom"]
 
 [project.urls]
 Homepage = "https://github.com/Lions-Eye-Institute/hvf_extraction_script"
+Repository = "https://github.com/Lions-Eye-Institute/hvf_extraction_script"
 
 [tool.setuptools.packages.find]
 include = ["hvf_extraction_script*"]
