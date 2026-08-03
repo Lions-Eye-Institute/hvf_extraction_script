@@ -84,6 +84,8 @@ The parser accepts only DICOM **Ophthalmic Visual Field Static Perimetry Measure
 | SITA Fast | `111817` |
 | SITA-Faster | `OPVTS101` |
 
+Pattern and strategy code recognition is independent: the parser accepts any recognised pattern code with any recognised strategy code. It does not restrict inputs to a pattern/strategy combination whitelist.
+
 Pattern-deviation values must be present. Esterman (monocular and binocular) and 3-in-1 macula patterns are explicitly rejected. An unsupported SOP class, protocol code, duplicate coordinate, malformed numeric value, or absent pattern-deviation data raises `UnsupportedHFADataError`.
 
 ## Non-goals

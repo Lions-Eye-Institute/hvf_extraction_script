@@ -41,14 +41,20 @@ See [the DICOM API reference](docs/dicom-api.md) for metadata, return types, sup
 
 ## Supported inputs
 
-The parser supports these validated Zeiss test patterns and strategies:
+The parser recognises these validated Zeiss protocol codes independently. This is not a pattern/strategy combination whitelist: any recognised pattern code may be paired with any recognised strategy code.
 
-| Test pattern | Strategy |
+| Test pattern | Code value |
 | --- | --- |
-| 10-2 | SITA Standard |
-| 24-2 | SITA Standard, SITA Fast |
-| 24-2C | SITA-Faster |
-| 30-2 | SITA Standard |
+| 10-2 | `111801` |
+| 24-2 | `111800` |
+| 24-2C | `OPVTP128` |
+| 30-2 | `111802` |
+
+| Strategy | Code value |
+| --- | --- |
+| SITA Standard | `111815` |
+| SITA Fast | `111817` |
+| SITA-Faster | `OPVTS101` |
 
 Esterman (monocular and binocular) and 3-in-1 macula tests are explicitly unsupported. Other unsupported protocol codes or absent pattern-deviation data raise `UnsupportedHFADataError`.
 

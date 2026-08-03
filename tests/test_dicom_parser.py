@@ -128,6 +128,16 @@ class ParseHFADicomTests(unittest.TestCase):
                 self.assertEqual(result.metadata["field_size"], expected_pattern)
                 self.assertEqual(result.metadata["strategy"], expected_strategy)
 
+    def test_recognized_pattern_and_strategy_codes_are_independent(self):
+        dataset = make_dataset()
+        dataset.PerformedProtocolCodeSequence[0].CodeValue = "111801"
+        dataset.PerformedProtocolCodeSequence[1].CodeValue = "111817"
+
+        result = parse_hfa_dicom(dataset)
+
+        self.assertEqual(result.metadata["field_size"], "10-2")
+        self.assertEqual(result.metadata["strategy"], "SITA Fast")
+
 
 if __name__ == "__main__":
     unittest.main()
