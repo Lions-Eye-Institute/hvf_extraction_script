@@ -1,334 +1,82 @@
-# HVF Extraction Script
+# HFA DICOM Parser
 
-Python module for Humphrey Visual Field (HVF) report data extraction. The package can taken in HVF single field analysis report images (from HFA2 or HFA3), and using OCR (tesseract) and image processing techniques (openCV), extracts data into an object oriented format for further processing.
+A small, coordinate-first parser for Humphrey Field Analyzer (HFA) DICOM static-perimetry data.
 
-## Getting Started
+This fork parses DICOM **Ophthalmic Visual Field Static Perimetry Measurements Storage** objects. It does not provide image/PDF OCR, spreadsheet serialisation, bulk-processing commands, or DICOM network retrieval.
 
-### Requirements
-- Python 3.6.7 or higher
-- TesserOCR
-- Regex
-- PyDicom
-- Pillow
-- OpenCV 4.2.0
-- FuzzyWuzzy
-- Fuzzysearch
+## Install
 
-### Installation
-
-Note: This software package was developed and tested on an Intel Mac OSX system; while it should work on any platform, its execution is best understood on such systems.
-
-To use the system, first download and install [Anaconda](https://www.anaconda.com/) (or Miniconda) for Python, a distribution and package manager for Python  specifically geared towards data science. This will help download many of the dependencies for the system.
-
-Within Anaconda, create a dedicated environment for development and use with HVF Extraction Script:
+This project uses [uv](https://docs.astral.sh/uv/):
 
 ```shell
-(base) $ conda create --name hvf_env # Replace 'hvf_env' with desired environment name
+uv sync
 ```
 
- and switch to that environment:
-
- ```shell
- (base) $ conda activate hvf_env # or the environment name you chose
- ```
-
-Within your environment, download a few required dependencies with Anaconda, namely PIP (to manage PyPI Package repository) and tesseract:
-
-```shell
-(hvf_env) $ conda install pip
-...
-(hvf_env) $ conda install -c conda-forge tesseract
-...
-```
-
-Lastly, use PIP to install hvf-extraction-script, to download the package and all other required dependencies:
-
-```shell
-(hvf_env) $ pip install hvf-extraction-script
-```
-
-Occasionally, installation of hvf-extraction-script has trouble locating some dependencies (specifically tesseract) and fails installation; this may be due to some internal links not refreshing. Try restarting your terminal program and trying again.
+The only runtime dependency is `pydicom`.
 
 ## Usage
 
-### Overview
+```python
+from pydicom import dcmread
+from hvf_extraction_script import parse_hfa_dicom
 
-HVF data can be stored in a variety of formats that can be imported into the hvf_extraction_script platform. The platform can import data from 1) HVF single field analysis report images from HFA2 or HFA3 (PNG, JPG, etc - any file format that openCV can read), 2) HVF DICOM files, and 3) serialized JSON files (produced by the script platform). See below for examples on how to import data from these different sources.
+dataset = dcmread("visual-field.dcm", stop_before_pixels=True)
+result = parse_hfa_dicom(dataset)
 
-Once imported, data is managed primarily through the Hvf_Object class, which contains the report metadata (name/ID, test date, field size and strategy, etc), and the 5 data plots (raw sensitivity, total deviation value/percentile plots, and pattern deviation value/percentile plots). Plot data is stored as Hvf_Plot_Array objects (internally as 10x10 Numpy arrays), and individual plot data elements are stored as either Hvf_Value or Hvf_Perc_Icon objects. See below for the basic structure of Hvf_Object (and helper classes).
-
-Data modules (which are Hvf_Object, Hvf_Plot_Array, Hvf_Value, Hvf_Perc_Icon) are contained in the subpackage hvf_data. hvf_extraction_script also includes two other subpackages, hvf_manager and utilities, that contain modules to assist in data processing.
-
-Subpackage hvf_manager contains functions to 'manage' or process HVF data. This includes a module for running unit tests for image extraction (hvf_test) and a module for exporting Hvf_Objects to human-readable spreadsheet for further processing (hvf_export). There is also a module for calculating HVF metrics (hvf_metric_calculator), but this module is still under development.
-
-Subpackage utilities contains general purpose utility modules not specific to HVF data. This includes a module for file I/O (file_utils), image processing (image_utils), OCR functions (ocr_utils - essentially a wrapper for TesserOCR), and regex functions (regex_utils).
-
-### Importing and exporting data
-
-Importing/extracting data from an image:
-
-```shell
->>> from hvf_extraction_script.hvf_data.hvf_object import Hvf_Object
->>> from hvf_extraction_script.utilities.file_utils import File_Utils
-
->>> hvf_img_path = "path/to/hvf/image/file/to/read";
->>> hvf_img = File_Utils.read_image_from_file(hvf_img_path);
->>> hvf_obj = Hvf_Object.get_hvf_object_from_image(hvf_img);
+coordinate = (-3.0, 21.0)
+raw_sensitivity = result.raw.at(*coordinate)
+total_deviation = result.tdv.values[coordinate]
+pattern_deviation_probability = result.pdp.values[coordinate]
 ```
 
-Importing data from a DICOM file:
+Each of the five plots is keyed by its original DICOM `(x, y)` test-point coordinate:
+
+- `result.raw` — raw sensitivity
+- `result.tdv` — total deviation value
+- `result.tdp` — total deviation probability
+- `result.pdv` — pattern deviation value
+- `result.pdp` — pattern deviation probability
+
+See [the DICOM API reference](docs/dicom-api.md) for metadata, return types, supported protocol codes, and errors.
+
+## Supported inputs
+
+The parser supports these validated Zeiss test patterns and strategies:
+
+| Test pattern | Strategy |
+| --- | --- |
+| 10-2 | SITA Standard |
+| 24-2 | SITA Standard, SITA Fast |
+| 24-2C | SITA-Faster |
+| 30-2 | SITA Standard |
+
+Unsupported protocol codes or absent pattern-deviation data raise `UnsupportedHFADataError`.
+
+## Testing
+
+Run unit tests:
 
 ```shell
->>> from hvf_extraction_script.hvf_data.hvf_object import Hvf_Object
->>> from hvf_extraction_script.utilities.file_utils import File_Utils
-
->>> hvf_dicom_path = "path/to/hvf/dicom/file/to/read";
->>> hvf_dicom = File_Utils.read_dicom_from_file(hvf_dicom_path);
->>> hvf_obj = Hvf_Object.get_hvf_object_from_dicom(hvf_dicom);
+uv run python -m unittest discover -s tests -v
 ```
 
-Saving as a text file:
-```shell
->>> serialized_string = hvf_obj.serialize_to_json();
->>> txt_file_path = “path/to/target/file/to/write”;
->>> File_Utils.write_string_to_file(serialized_string, target_file_path)
-```
-
-Reinstantiating Hvf_Object from text file
-```shell
->>> hvf_txt = File_Utils.read_text_from_file(txt_file_path);
->>> hvf_obj = Hvf_Object.get_hvf_object_from_text(hvf_txt);
-```
-
-Export to spreadsheet (tab-separated values):
-```shell
-# Takes in a dictionary of filename_string -> hvf_obj
->>> from hvf_extraction_script.hvf_manager.hvf_export import Hvf_Export;
-
->>> dict_of_hvf_objs = {“file1.PNG”: hvf_obj1, “file2.PNG”: hvf_obj2, “file3.PNG”: hvf_obj3 };
->>> spreadsheet_string = Hvf_Export.export_hvf_list_to_spreadsheet(dict_of_hvf_objs)
->>> File_Utils.write_string_to_file(return_string, "output_spreadsheet.tsv")
-# Saves data in a spreadsheet, with first column as filename
-```
-
-Import Hvf_Objects from outputted spreadsheet (tab-separated values):
-```shell
->>> tsv_file_string = File_Utils.read_text_from_file("output_spreadsheet.tsv");
->>> dict_of_hvf_objs = Hvf_Export.import_hvf_list_from_spreadsheet(tsv_file_string);
-# Returns dictionary of filename_string -> hvf_obj
-```
-
-### Structure of Hvf_Object and helper classes
-
-Hvf_Object contains data from the source HVF study within instance variables. Metadata (including name, ID, field size, reliability indices, etc) strings are stored within a instance variable dictionary; data is accessible using keys stored within Hvf_Object as constants:
-
-- KEYLABEL_LAYOUT # Internal data corresponding to layout of source HVF image
-- KEYLABEL_NAME
-- KEYLABEL_DOB
-- KEYLABEL_ID
-- KEYLABEL_TEST_DATE
-- KEYLABEL_LATERALITY
-- KEYLABEL_FOVEA
-- KEYLABEL_FIXATION_LOSS
-- KEYLABEL_FALSE_POS
-- KEYLABEL_FALSE_NEG
-- KEYLABEL_TEST_DURATION
-- KEYLABEL_FIELD_SIZE
-- KEYLABEL_STRATEGY
-- KEYLABEL_PUPIL_DIAMETER
-- KEYLABEL_RX
-- KEYLABEL_MD
-- KEYLABEL_PSD
-- KEYLABEL_VF
-
-Metadata can be accessed from the object as such:
+The anonymised HFA sample corpus remains outside the repository. To run its integration test:
 
 ```shell
-# As example, accessing name:
->>> hvf_obj.metadata[Hvf_Object.KEYLABEL_NAME];
-  'SMITH, JOHN'
+HFA_SAMPLE_DIR=/path/to/all_hvf_samples \
+  uv run python -m unittest discover -s tests -v
 ```
 
-Additionally, there are 5 plots in every HVF object, represented by Hvf_Plot_Array objects. These can be accessed by:
+Build source and wheel distributions:
 
 ```shell
-# Raw sensitivity array:
-hvf_obj.raw_value_array
-
-# Total deviation value array:
-hvf_obj.abs_dev_value_array
-
-# Pattern deviation value array:
-hvf_obj.pat_dev_value_array
-
-# Total deviation percentile array:
-hvf_obj.abs_dev_percentile_array
-
-# Pattern deviation percentile array:
-hvf_obj.pat_dev_percentile_array
+uv build
 ```
 
-The main data in the Hvf_Plot_Array object are:
+## Legacy image/OCR restoration
 
-```shell
-array_obj.plot_type
-# Possible values are Hvf_Plot_Array.PLOT_RAW, Hvf_Plot_Array.PLOT_TOTAL_DEV or Hvf_Plot_Array.PLOT_PATTERN_DEV
+The upstream image/OCR implementation is intentionally excluded from the active package. It is recoverable from the local `legacy-image-ocr-baseline` Git tag; see [legacy restoration](docs/legacy-restoration.md).
 
-array_obj.icon_type
-# Possible values are Hvf_Plot_Array.PLOT_VALUE or, Hvf_Plot_Array.PLOT_PERC
+## Licence
 
-array_obj.plot_array
-# 10x10 Numpy array containing either Hvf_Value or Hvf_Perc_Icon (depending on icon_type) representing the value of the plot in that position  
-```
-
-Hvf_Value is essentially a wrapper class for a numerical value in a value plot (only relevant datum in this object is Hvf_Value.value, the number to wrap). There are some special non-numerical values that this object can take in specific circumstances, including:
-
-- Hvf_Value.VALUE_NO_VALUE (ie, a blank value - for areas in the plot that are empty) - ' '
-- Hvf_Value.VALUE_FAILURE (ie, the program was unable to determine was the value was - in other words, an program error) '?'
-- Hvf_Value.VALUE_BELOW_THRESHOLD (the value '<0') - '<0 '
-
-Values from Hvf_Value can be queried by calling the method get_value() (ie, hvf_value_obj.get_value()) to get the raw value wrapped, or get_display_string(), which will convert the above cases to a display character/string version for easy reading.
-
-Hvf_Perc_Icon is a similar wrapper class for a percentile icon in a percentile plot (again, only relevant datum in this object is Hvf_Perc_Icon.perc_enum, an enum value corresponding to the icon it represents). The possible values are:
-
-- Hvf_Perc_Icon.PERC_NO_VALUE (ie, a blank value - for areas in the plot that are empty) - ' '
-- Hvf_Perc_Icon.PERC_NORMAL (a 'normal' sensitivity - single dot icon) - '.'
-- Hvf_Perc_Icon.PERC_5_PERCENTILE (lower than 5th percentile) - '5'
-- Hvf_Perc_Icon.PERC_2_PERCENTILE (lower than 2nd percentile) - '2'
-- Hvf_Perc_Icon.PERC_1_PERCENTILE (lower than 1st percentile) - '1'
-- Hvf_Perc_Icon.PERC_HALF_PERCENTILE (lower than 0.5th percentile - full black box) - 'x'
-- Hvf_Perc_Icon.PERC_FAILURE (the program was unable to determine was the value was - in other words, an program error) - '?'
-
-Values from Hvf_Perc_Icon can be queried by calling the method get_enum() to get the enum value, or get_display_string(), which will get a character representing the icon.
-
-For example, to query for a specific value:
-```shell
-# As example, accessing name:
->>> hvf_obj.metadata[Hvf_Object.KEYLABEL_NAME]
-  'SMITH, JOHN'
->>> hvf_obj.metadata[Hvf_Object.KEYLABEL_MD]
-  '-5.54'
->>> hvf_obj.metadata[Hvf_Object.KEYLABEL_VFI]
-  '87%'
->>> print(hvf_obj.get_display_raw_val_plot_string())
-  Raw Value Plot:
-
-
-             23  24  28  25            
-
-         29  29  28  29  29  28        
-
-     27  27  29  29  29  29  27  25    
-
-     29  27  30  31  27  27  27  27  23
-
-     29   0  27  32  30  28  15  11  <0
-
-     26  27  25  30  31  28   0  <0    
-
-         29  27  27  15   2  <0        
-
-             26  26  23   0            
-
->>> hvf_obj.raw_value_array.plot_array[7,7].get_value()
-  -97 # In above plot, refers to <0 - value is Hvf_Value.VALUE_BELOW_THRESHOLD
->>> hvf_obj.raw_value_array.plot_array[7,7].get_display_string()
-  '<0'
->>> hvf_obj.pat_dev_percentile_array.plot_array[4,4].get_enum()
-  1 # Enum value for Hvf_Perc_Icon.PERC_NORMAL
->>> hvf_obj.pat_dev_percentile_array.plot_array[4,4].get_display_string()
-  '.' # Character representation of Hvf_Perc_Icon.PERC_NORMAL
-```
-
-### Running Unit Tests
-
-Single Image Testing:
-
-Running a single image test performs an extraction of an image report, shows its extraction data in pretty-print, and tests serialization/deserialization procedures
-
-```shell
->>> from hvf_extraction_script.hvf_manager.hvf_test import Hvf_Test
->>> from hvf_extraction_script.utilities.file_utils import File_Utils
-
->>> image_path = “path/to/image/file.PNG”;
->>> hvf_image = File_Utils.read_image_from_file(image_path);
->>> Hvf_Test.test_single_image(hvf_image);
-...
-```
-
-Unit Testing:
-
-This package comes with the ability to run unit tests, but with no pre-loaded unit tests to run. Unit testing code is under Hvf_Test, with some example code in hvf_object_testers.py (uploaded in GitHub source code). In general, unit testing can perform testing comparison between:
-- Image extraction vs serialized reference
-- Image extraction vs DICOM file reference
-- Serialized text file vs DICOM file reference
-- Serialized text file vs serialized reference
-
-The image file and reference test files are stored under hvf_test_cases with corresponding names.
-
-Adding unit tests:
-
-```shell
->>> unit_test_name = “unit_test_name”
->>> test_type = Hvf_Test.UNIT_TEST_IMAGE_VS_DICOM;
->>> ref_data_path = "path/to/dicom/file.dcm"
->>> test_data_path = “path/to/image/file.PNG”;
->>> Hvf_Test.add_unit_test(test_name, test_type, ref_data_path, test_data_path);
-
-```
-
-Running unit tests:
-```shell
->>> Hvf_Test.test_unit_tests(unit_test_nam, test_type)
-...
-[SYSTEM] ================================================================================
-[SYSTEM] Starting test: v2_26
-[SYSTEM] Test v2_26: FAILED ==============================
-[SYSTEM] - Metadata MISMATCH COUNT: 1
-[SYSTEM] --> Key: pupil_diameter - expected: 4.1, actual: 4.7
-[SYSTEM] - Raw Value Plot: FULL MATCH
-[SYSTEM] - Total Deviation Value Plot: FULL MATCH
-[SYSTEM] - Pattern Deviation Value Plot: FULL MATCH
-[SYSTEM] - Total Deviation Percentile Plot: FULL MATCH
-[SYSTEM] - Pattern Deviation Percentile Plot: FULL MATCH
-[SYSTEM] END Test v2_26 FAILURE REPORT =====================
-[SYSTEM] ================================================================================
-[SYSTEM] Starting test: v2_27
-[SYSTEM] Test v2_27: PASSED
-[SYSTEM] ================================================================================
-[SYSTEM] Starting test: v2_28
-[SYSTEM] Test v2_28: PASSED
-[SYSTEM] ================================================================================
-...
-[SYSTEM] ================================================================================
-[SYSTEM] UNIT TEST AGGREGATE METRICS:
-[SYSTEM] Total number of tests: 30
-[SYSTEM] Average extraction time per report: 4741ms
-[SYSTEM]
-[SYSTEM] Total number of metadata fields: 510
-[SYSTEM] Total number of metadata field errors: 7
-[SYSTEM] Metadata field error rate: 0.014
-[SYSTEM]
-[SYSTEM] Total number of value data points: 3817
-[SYSTEM] Total number of value data point errors: 2
-[SYSTEM] Value data point error rate: 0.001
-[SYSTEM]
-[SYSTEM] Total number of percentile data points: 3309
-[SYSTEM] Total number of percentile data point errors: 0
-[SYSTEM] Percentile data point error rate: 0.0
-```
-
-## Authors
-- Murtaza Saifee, MD - Ophthalmology resident, UCSF. Email: saifeeapps@gmail.com
-
-## Validation
-In progress
-
-## License
-GPL License
-
-## Using/Contributing
-This project was developed in the spirit of facilitating vision research. To that end, we encourage all to download, use, critique and improve upon the project. Fork requests are encouraged. Research collaboration requests are also welcomed.
-
-## Acknowledgements
-- PyImageSearch for excellent tutorials on image processing
+This project is licensed under the GNU General Public License v3.0 only. See [LICENSE.txt](LICENSE.txt) and [NOTICE](NOTICE).

@@ -1,0 +1,17 @@
+hvf_extraction_script
+Copyright (C) 2026 Lions Eye Institute Limited
+
+This repository contains a DICOM-only fork of the upstream
+hvf_extraction_script project. The DICOM-only parser, coordinate-first result
+model, tests, and associated documentation are modifications made by Lions Eye
+Institute Limited in 2026.
+
+Upstream project: https://github.com/msaifee786/hvf_extraction_script
+Fork repository: https://github.com/Lions-Eye-Institute/hvf_extraction_script
+
+This notice does not replace, remove, or alter any copyright notices belonging
+to upstream contributors. The complete licensing terms for this repository are
+in LICENSE.txt and are GNU General Public License version 3.0 only.
+
+When conveying a binary or source release of this fork, provide the complete
+corresponding source for that release under the same GPLv3 terms.

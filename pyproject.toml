@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hvf-extraction-script"
 version = "0.1.0"
-description = "Python extraction script for HVF report images, with optional AWS Rekognition support."
+description = "Coordinate-first parser for HFA static-perimetry DICOM objects."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "GPL-3.0-only"
@@ -16,33 +16,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "boto3",
-    "fuzzysearch",
-    "fuzzywuzzy",
-    "numpy",
-    "opencv-python",
-    "pillow",
-    "pydicom",
-    "python-levenshtein",
-    "regex",
-    "typed-argument-parser",
-]
-
-[project.optional-dependencies]
-tesserocr = ["tesserocr"]
+dependencies = ["pydicom"]
 
 [project.urls]
 Homepage = "https://github.com/msaifee786/hvf_extraction_script"
 
 [tool.setuptools.packages.find]
 include = ["hvf_extraction_script*"]
-
-[tool.setuptools.package-data]
-hvf_extraction_script = [
-    "hvf_data/other_icons/*.PNG",
-    "hvf_data/perc_icons/*.JPG",
-    "hvf_data/value_icons/v0/*.PNG",
-    "hvf_data/value_icons/v1/*.PNG",
-    "hvf_data/value_icons/v2/*.PNG",
-]
