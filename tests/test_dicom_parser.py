@@ -91,6 +91,25 @@ class ParseHFADicomTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedHFADataError, "test pattern"):
             parse_hfa_dicom(dataset)
 
+    def test_esterman_patterns_are_explicitly_rejected(self):
+        for code, pattern in (
+            ("OPVTP117", "Esterman Monocular"),
+            ("OPVTP118", "Esterman Binocular"),
+        ):
+            with self.subTest(pattern=pattern):
+                dataset = make_dataset()
+                dataset.PerformedProtocolCodeSequence[0].CodeValue = code
+
+                with self.assertRaisesRegex(UnsupportedHFADataError, pattern):
+                    parse_hfa_dicom(dataset)
+
+    def test_3_in_1_macula_pattern_is_explicitly_rejected(self):
+        dataset = make_dataset()
+        dataset.PerformedProtocolCodeSequence[0].CodeValue = "111804"
+
+        with self.assertRaisesRegex(UnsupportedHFADataError, "3-in-1 Macula"):
+            parse_hfa_dicom(dataset)
+
     def test_zeiss_protocol_codes_for_supported_patterns_and_strategies(self):
         cases = [
             ("111801", "111815", "10-2", "SITA Standard"),

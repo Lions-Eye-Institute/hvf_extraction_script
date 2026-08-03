@@ -25,6 +25,11 @@ STRATEGY_CODES = {
     "111817": "SITA Fast",
     "OPVTS101": "SITA-Faster",
 }
+UNSUPPORTED_PATTERN_CODES = {
+    "111804": "3-in-1 Macula",
+    "OPVTP117": "Esterman Monocular",
+    "OPVTP118": "Esterman Binocular",
+}
 
 
 def parse_hfa_dicom(dataset: Dataset) -> HFAResult:
@@ -37,6 +42,7 @@ def parse_hfa_dicom(dataset: Dataset) -> HFAResult:
 
     _require_static_perimetry(dataset)
     protocols = _sequence(dataset, "PerformedProtocolCodeSequence")
+    _reject_explicitly_unsupported_patterns(protocols)
     field_size = _require_protocol(protocols, PATTERN_CODES, "test pattern")
     strategy = _require_protocol(protocols, STRATEGY_CODES, "test strategy")
     _require_pattern_deviation(dataset)
@@ -106,6 +112,13 @@ def _require_protocol(protocols: Iterable[Dataset], supported: dict[str, str], l
             return value
     codes = ", ".join(str(getattr(protocol, "CodeValue", "")) for protocol in protocols)
     raise UnsupportedHFADataError(f"Unsupported {label} protocol code(s): {codes or 'none'}.")
+
+
+def _reject_explicitly_unsupported_patterns(protocols: Iterable[Dataset]) -> None:
+    for protocol in protocols:
+        pattern = UNSUPPORTED_PATTERN_CODES.get(str(getattr(protocol, "CodeValue", "")))
+        if pattern is not None:
+            raise UnsupportedHFADataError(f"{pattern} tests are explicitly unsupported.")
 
 
 def _require_pattern_deviation(dataset: Dataset) -> None:

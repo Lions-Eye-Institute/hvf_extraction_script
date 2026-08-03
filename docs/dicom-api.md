@@ -84,7 +84,7 @@ The parser accepts only DICOM **Ophthalmic Visual Field Static Perimetry Measure
 | SITA Fast | `111817` |
 | SITA-Faster | `OPVTS101` |
 
-Pattern-deviation values must be present. An unsupported SOP class, protocol code, duplicate coordinate, malformed numeric value, or absent pattern-deviation data raises `UnsupportedHFADataError`.
+Pattern-deviation values must be present. Esterman (monocular and binocular) and 3-in-1 macula patterns are explicitly rejected. An unsupported SOP class, protocol code, duplicate coordinate, malformed numeric value, or absent pattern-deviation data raises `UnsupportedHFADataError`.
 
 ## Non-goals
 

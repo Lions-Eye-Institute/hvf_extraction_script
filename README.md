@@ -50,7 +50,7 @@ The parser supports these validated Zeiss test patterns and strategies:
 | 24-2C | SITA-Faster |
 | 30-2 | SITA Standard |
 
-Unsupported protocol codes or absent pattern-deviation data raise `UnsupportedHFADataError`.
+Esterman (monocular and binocular) and 3-in-1 macula tests are explicitly unsupported. Other unsupported protocol codes or absent pattern-deviation data raise `UnsupportedHFADataError`.
 
 ## Testing
 

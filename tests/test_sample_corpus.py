@@ -6,7 +6,7 @@ import unittest
 
 from pydicom import dcmread
 
-from hvf_extraction_script import parse_hfa_dicom
+from hvf_extraction_script import UnsupportedHFADataError, parse_hfa_dicom
 
 
 SAMPLE_ROOT = os.environ.get("HFA_SAMPLE_DIR")
@@ -22,6 +22,11 @@ EXPECTED_SAMPLES = {
     "strategies/sita-fast.dcm": ("24-2", "SITA Fast", "Left", 54),
     "strategies/sita-faster.dcm": ("24-2C", "SITA-Faster", "Left", 64),
     "strategies/sita-standard.dcm": ("24-2", "SITA Standard", "Right", 54),
+}
+REJECTED_SAMPLES = {
+    "rejects/3in1macula.dcm": "3-in-1 Macula",
+    "rejects/esterman-binocular.dcm": "Esterman Binocular",
+    "rejects/esterman-monocular.dcm": "Esterman Monocular",
 }
 
 
@@ -41,3 +46,11 @@ class SampleCorpusTests(unittest.TestCase):
                 self.assertEqual(set(result.raw.coordinates), set(result.tdp.coordinates))
                 self.assertEqual(set(result.raw.coordinates), set(result.pdv.coordinates))
                 self.assertEqual(set(result.raw.coordinates), set(result.pdp.coordinates))
+
+    def test_known_unsupported_samples_are_explicitly_rejected(self):
+        root = Path(SAMPLE_ROOT)
+        for relative_path, expected_pattern in REJECTED_SAMPLES.items():
+            with self.subTest(sample=relative_path):
+                dataset = dcmread(root / relative_path, stop_before_pixels=True)
+                with self.assertRaisesRegex(UnsupportedHFADataError, expected_pattern):
+                    parse_hfa_dicom(dataset)
