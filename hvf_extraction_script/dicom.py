@@ -91,6 +91,7 @@ def _metadata(dataset: Dataset, field_size: str, strategy: str) -> dict[str, obj
         "field_size": field_size,
         "strategy": strategy,
         "duration_seconds": _number(getattr(dataset, "VisualFieldTestDuration", None), integer=True),
+        "fovea": _fovea(dataset),
         "pupil_diameter": _number(getattr(eye, "PupilSize", None)),
         "refraction": _refraction(eye),
         "md": _number(getattr(results, "GlobalDeviationFromNormal", None)),
@@ -138,6 +139,15 @@ def _coordinate(point: Dataset) -> Coordinate:
 def _clinical_eye(dataset: Dataset, laterality: str) -> Dataset:
     attribute = "OphthalmicPatientClinicalInformationRightEyeSequence" if laterality == "Right" else "OphthalmicPatientClinicalInformationLeftEyeSequence"
     return _first(_sequence(dataset, attribute))
+
+
+def _fovea(dataset: Dataset) -> int | str:
+    if str(getattr(dataset, "FovealSensitivityMeasured", "")) != "YES":
+        return "OFF"
+    value = _number(getattr(dataset, "FovealSensitivity", None))
+    if value is None:
+        raise UnsupportedHFADataError("FovealSensitivity is absent although FovealSensitivityMeasured is YES.")
+    return int(value)
 
 
 def _refraction(eye: Dataset) -> dict[str, int | float | None]:

@@ -60,6 +60,7 @@ The current parser preserves DICOM numeric values directly:
 | `field_size` | `10-2`, `24-2`, `24-2C`, or `30-2` |
 | `strategy` | `SITA Standard`, `SITA Fast`, or `SITA-Faster` |
 | `duration_seconds` | integer or `None` |
+| `fovea` | integer sensitivity when measured; otherwise `"OFF"` |
 | `pupil_diameter` | float or `None` |
 | `refraction` | mapping with `sphere`, `cylinder`, and `axis` |
 | `md`, `psd` | float or `None` |

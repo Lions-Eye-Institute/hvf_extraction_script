@@ -13,17 +13,17 @@ from hvf_extraction_script import UnsupportedHFADataError, parse_hfa_dicom
 
 SAMPLE_ROOT = os.environ.get("HFA_SAMPLE_DIR")
 EXPECTED_SAMPLES = {
-    "formats/hfa-3.dcm": ("24-2C", "SITA-Faster", "Right", 64),
-    "formats/hfa-II-i.dcm": ("24-2", "SITA Standard", "Right", 54),
-    "laterality/left.dcm": ("24-2C", "SITA-Faster", "Left", 64),
-    "laterality/right.dcm": ("24-2C", "SITA-Faster", "Right", 64),
-    "patterns/10-2.dcm": ("10-2", "SITA Standard", "Right", 68),
-    "patterns/24-2.dcm": ("24-2", "SITA Standard", "Left", 54),
-    "patterns/24-2C.dcm": ("24-2C", "SITA-Faster", "Right", 64),
-    "patterns/30-2.dcm": ("30-2", "SITA Standard", "Right", 76),
-    "strategies/sita-fast.dcm": ("24-2", "SITA Fast", "Left", 54),
-    "strategies/sita-faster.dcm": ("24-2C", "SITA-Faster", "Left", 64),
-    "strategies/sita-standard.dcm": ("24-2", "SITA Standard", "Right", 54),
+    "formats/hfa-3.dcm": ("24-2C", "SITA-Faster", "Right", "OFF", 64),
+    "formats/hfa-II-i.dcm": ("24-2", "SITA Standard", "Right", 33, 54),
+    "laterality/left.dcm": ("24-2C", "SITA-Faster", "Left", "OFF", 64),
+    "laterality/right.dcm": ("24-2C", "SITA-Faster", "Right", "OFF", 64),
+    "patterns/10-2.dcm": ("10-2", "SITA Standard", "Right", "OFF", 68),
+    "patterns/24-2.dcm": ("24-2", "SITA Standard", "Left", "OFF", 54),
+    "patterns/24-2C.dcm": ("24-2C", "SITA-Faster", "Right", "OFF", 64),
+    "patterns/30-2.dcm": ("30-2", "SITA Standard", "Right", "OFF", 76),
+    "strategies/sita-fast.dcm": ("24-2", "SITA Fast", "Left", "OFF", 54),
+    "strategies/sita-faster.dcm": ("24-2C", "SITA-Faster", "Left", "OFF", 64),
+    "strategies/sita-standard.dcm": ("24-2", "SITA Standard", "Right", "OFF", 54),
 }
 EXPECTED_PLOT_DIGESTS = {
     "formats/hfa-3.dcm": {"raw": "81f0276f45dc4ca7c5ed1cb5187dfa82f400c5e47e039be3e34c4a54a013f11d", "tdv": "be6a6fe1fda53a1fa6ff079f65291b9a492978c21f94e35a0c12050b31654707", "tdp": "52f64f510e1cc41e0748a5e527af7e0a3c440bd9be7bfe74c06a248c42adf4c1", "pdv": "5d20e7f1c0fc7b4bc535591ac35c81e084a39410f3d07483d9373aadd06ebd8c", "pdp": "65b86d629b0cf0b1d2db68c020275c489782bcc3eb554db6e2e2519874072a79"},
@@ -59,10 +59,11 @@ class SampleCorpusTests(unittest.TestCase):
         for relative_path, expected in EXPECTED_SAMPLES.items():
             with self.subTest(sample=relative_path):
                 result = parse_hfa_dicom(dcmread(root / relative_path, stop_before_pixels=True))
-                pattern, strategy, laterality, point_count = expected
+                pattern, strategy, laterality, fovea, point_count = expected
                 self.assertEqual(result.metadata["field_size"], pattern)
                 self.assertEqual(result.metadata["strategy"], strategy)
                 self.assertEqual(result.metadata["laterality"], laterality)
+                self.assertEqual(result.metadata["fovea"], fovea)
                 self.assertEqual(len(result.raw.values), point_count)
                 self.assertEqual(set(result.raw.coordinates), set(result.tdv.coordinates))
                 self.assertEqual(set(result.raw.coordinates), set(result.tdp.coordinates))

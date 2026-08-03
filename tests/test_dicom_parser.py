@@ -31,6 +31,7 @@ def make_dataset(pattern=True):
     dataset.StudyDate = "20260731"
     dataset.Laterality = "R"
     dataset.VisualFieldTestDuration = 167
+    dataset.FovealSensitivityMeasured = "NO"
 
     fixation = Dataset()
     fixation.PatientNotProperlyFixatedQuantity = 1
@@ -72,6 +73,7 @@ class ParseHFADicomTests(unittest.TestCase):
         self.assertEqual(result.metadata["test_date"], date(2026, 7, 31))
         self.assertEqual(result.metadata["field_size"], "24-2C")
         self.assertEqual(result.metadata["strategy"], "SITA-Faster")
+        self.assertEqual(result.metadata["fovea"], "OFF")
         self.assertIsNone(result.metadata["pupil_diameter"])
         self.assertEqual(set(result.raw.coordinates), {(3.0, 3.0), (5.0, 7.0)})
         self.assertEqual(result.raw.at(3.0, 3.0), 28)
@@ -79,6 +81,15 @@ class ParseHFADicomTests(unittest.TestCase):
         self.assertEqual(result.tdp.at(5.0, 7.0), 5.0)
         self.assertEqual(result.pdv.at(5.0, 7.0), -3)
         self.assertEqual(result.pdp.at(5.0, 7.0), 2.0)
+
+    def test_measured_fovea_is_returned_as_an_integer(self):
+        dataset = make_dataset()
+        dataset.FovealSensitivityMeasured = "YES"
+        dataset.FovealSensitivity = 33.9
+
+        result = parse_hfa_dicom(dataset)
+
+        self.assertEqual(result.metadata["fovea"], 33)
 
     def test_missing_pattern_deviation_is_out_of_scope(self):
         with self.assertRaisesRegex(UnsupportedHFADataError, "Pattern deviation"):
