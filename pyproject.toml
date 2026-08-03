@@ -11,6 +11,10 @@ requires-python = ">=3.12"
 license = "GPL-3.0-only"
 authors = [
     { name = "Murtaza Saifee", email = "saifeeapps@gmail.com" },
+    { name = "Lions Eye Institute Limited" },
+]
+maintainers = [
+    { name = "Lions Eye Institute Limited" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -19,7 +23,7 @@ classifiers = [
 dependencies = ["pydicom"]
 
 [project.urls]
-Homepage = "https://github.com/msaifee786/hvf_extraction_script"
+Homepage = "https://github.com/Lions-Eye-Institute/hvf_extraction_script"
 
 [tool.setuptools.packages.find]
 include = ["hvf_extraction_script*"]
