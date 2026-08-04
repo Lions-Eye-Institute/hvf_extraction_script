@@ -25,6 +25,15 @@ STRATEGY_CODES = {
     "111817": "SITA Fast",
     "OPVTS101": "SITA-Faster",
 }
+GHT_RESULT_CODES = {
+    ("DCM", "111849"): "Abnormally High",
+    ("DCM", "111848"): "Borderline",
+    ("DCM", "111851"): "Borderline / General Reduction",
+    ("DCM", "111850"): "General Reduction of Sensitivity",
+    ("SRT", "M-00101"): "WNL",
+    ("SCT", "125112009"): "WNL",
+    ("DCM", "111847"): "ONL",
+}
 UNSUPPORTED_PATTERN_CODES = {
     "111804": "3-in-1 Macula",
     "OPVTP117": "Esterman Monocular",
@@ -97,6 +106,7 @@ def _metadata(dataset: Dataset, field_size: str, strategy: str) -> dict[str, obj
         "md": _number(getattr(results, "GlobalDeviationFromNormal", None)),
         "psd": _number(getattr(results, "LocalizedDeviationFromNormal", None)),
         "vfi": _vfi(dataset),
+        "ght": _ght(dataset),
     }
 
 
@@ -165,6 +175,22 @@ def _vfi(dataset: Dataset) -> int | None:
         concept = _first(_sequence(observation, "ConceptNameCodeSequence"))
         if str(getattr(concept, "CodeMeaning", "")) == "Visual Field Index":
             return _number(getattr(observation, "NumericValue", None), integer=True)
+    return None
+
+
+def _ght(dataset: Dataset) -> str | None:
+    for index in _sequence(dataset, "VisualFieldGlobalResultsIndexSequence"):
+        observation = _first(_sequence(index, "DataObservationSequence"))
+        concept = _first(_sequence(observation, "ConceptNameCodeSequence"))
+        name = str(getattr(concept, "CodingSchemeDesignator", "")), str(getattr(concept, "CodeValue", ""))
+        if name != ("DCM", "111855"):
+            continue
+        result = _first(_sequence(observation, "ConceptCodeSequence"))
+        code = str(getattr(result, "CodingSchemeDesignator", "")), str(getattr(result, "CodeValue", ""))
+        value = GHT_RESULT_CODES.get(code)
+        if value is None:
+            raise UnsupportedHFADataError(f"Unsupported Glaucoma Hemifield Test result code {code!r}.")
+        return value
     return None
 
 

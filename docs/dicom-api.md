@@ -65,6 +65,7 @@ The current parser preserves DICOM numeric values directly:
 | `refraction` | mapping with `sphere`, `cylinder`, and `axis` |
 | `md`, `psd` | float or `None` |
 | `vfi` | integer percentage value or `None` |
+| `ght` | `Abnormally High`, `Borderline`, `Borderline / General Reduction`, `General Reduction of Sensitivity`, `WNL`, `ONL`, or `None` when no GHT result is present |
 
 Patient name, identifier, and date of birth are intentionally not part of this API.
 

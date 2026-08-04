@@ -66,6 +66,21 @@ def make_dataset(pattern=True):
     return dataset
 
 
+def set_ght(dataset, scheme, code):
+    name = Dataset()
+    name.CodingSchemeDesignator = "DCM"
+    name.CodeValue = "111855"
+    result = Dataset()
+    result.CodingSchemeDesignator = scheme
+    result.CodeValue = code
+    observation = Dataset()
+    observation.ConceptNameCodeSequence = Sequence([name])
+    observation.ConceptCodeSequence = Sequence([result])
+    index = Dataset()
+    index.DataObservationSequence = Sequence([observation])
+    dataset.VisualFieldGlobalResultsIndexSequence = Sequence([index])
+
+
 class ParseHFADicomTests(unittest.TestCase):
     def test_returns_five_coordinate_keyed_plots(self):
         result = parse_hfa_dicom(make_dataset())
@@ -74,6 +89,7 @@ class ParseHFADicomTests(unittest.TestCase):
         self.assertEqual(result.metadata["field_size"], "24-2C")
         self.assertEqual(result.metadata["strategy"], "SITA-Faster")
         self.assertEqual(result.metadata["fovea"], "OFF")
+        self.assertIsNone(result.metadata["ght"])
         self.assertIsNone(result.metadata["pupil_diameter"])
         self.assertEqual(set(result.raw.coordinates), {(3.0, 3.0), (5.0, 7.0)})
         self.assertEqual(result.raw.at(3.0, 3.0), 28)
@@ -90,6 +106,30 @@ class ParseHFADicomTests(unittest.TestCase):
         result = parse_hfa_dicom(dataset)
 
         self.assertEqual(result.metadata["fovea"], 33)
+
+    def test_ght_codes_are_mapped_to_application_values(self):
+        cases = [
+            ("DCM", "111849", "Abnormally High"),
+            ("DCM", "111848", "Borderline"),
+            ("DCM", "111851", "Borderline / General Reduction"),
+            ("DCM", "111850", "General Reduction of Sensitivity"),
+            ("SRT", "M-00101", "WNL"),
+            ("SCT", "125112009", "WNL"),
+            ("DCM", "111847", "ONL"),
+        ]
+        for scheme, code, expected in cases:
+            with self.subTest(scheme=scheme, code=code):
+                dataset = make_dataset()
+                set_ght(dataset, scheme, code)
+
+                self.assertEqual(parse_hfa_dicom(dataset).metadata["ght"], expected)
+
+    def test_unknown_ght_code_is_out_of_scope(self):
+        dataset = make_dataset()
+        set_ght(dataset, "DCM", "UNKNOWN")
+
+        with self.assertRaisesRegex(UnsupportedHFADataError, "Glaucoma Hemifield Test"):
+            parse_hfa_dicom(dataset)
 
     def test_missing_pattern_deviation_is_out_of_scope(self):
         with self.assertRaisesRegex(UnsupportedHFADataError, "Pattern deviation"):
