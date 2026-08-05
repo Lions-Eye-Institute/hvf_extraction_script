@@ -8,10 +8,11 @@ import unittest
 
 from pydicom import dcmread
 
-from hvf_extraction_script import UnsupportedHFADataError, parse_hfa_dicom
+from hvf_extraction_script import ThresholdResult, UnsupportedHFADataError, parse_hfa_dicom
 
 
 SAMPLE_ROOT = os.environ.get("HFA_SAMPLE_DIR")
+THREE_IN_ONE_SAMPLE_ROOT = os.environ.get("HFA_3IN1_SAMPLE_DIR")
 EXPECTED_SAMPLES = {
     "formats/hfa-3.dcm": ("24-2C", "SITA-Faster", "Right", "OFF", "ONL", 64),
     "formats/hfa-II-i.dcm": ("24-2", "SITA Standard", "Right", 33, "WNL", 54),
@@ -39,9 +40,11 @@ EXPECTED_PLOT_DIGESTS = {
     "strategies/sita-standard.dcm": {"raw": "7f83bcda95093bc69b5f92b647b65a947864df4859b728f9fdd907d6b9522278", "tdv": "b9365d2c202ee40bcd145ff7a569ee98d00f399582aab8961e2a1824d2352d2f", "tdp": "67c7915ba5c425c74c03b69a0927529525952a8d5a5af5502c4281d0e4f08deb", "pdv": "a7a1932d44cdaaec458a95d1a53d3f8402a8f008b0b678c97dee4641503818ac", "pdp": "e2332a713b57fba0a5d2434fc0120b0f21c02d0f372157106c97b2772e46cc0e"},
 }
 REJECTED_SAMPLES = {
-    "rejects/3in1macula.dcm": "3-in-1 Macula",
     "rejects/esterman-binocular.dcm": "Esterman Binocular",
     "rejects/esterman-monocular.dcm": "Esterman Monocular",
+}
+THRESHOLD_SAMPLES = {
+    "rejects/3in1macula.dcm": ("3-in-1 Macula", "Full Threshold", "Left", 16, 4),
 }
 
 
@@ -81,3 +84,32 @@ class SampleCorpusTests(unittest.TestCase):
                 dataset = dcmread(root / relative_path, stop_before_pixels=True)
                 with self.assertRaisesRegex(UnsupportedHFADataError, expected_pattern):
                     parse_hfa_dicom(dataset)
+
+    def test_known_full_threshold_macula_samples_are_parsed(self):
+        root = Path(SAMPLE_ROOT)
+        for relative_path, expected in THRESHOLD_SAMPLES.items():
+            with self.subTest(sample=relative_path):
+                result = parse_hfa_dicom(dcmread(root / relative_path, stop_before_pixels=True))
+                field_size, strategy, laterality, point_count, retest_count = expected
+                self.assertIsInstance(result, ThresholdResult)
+                self.assertEqual(result.metadata["field_size"], field_size)
+                self.assertEqual(result.metadata["strategy"], strategy)
+                self.assertEqual(result.metadata["laterality"], laterality)
+                self.assertEqual(len(result.points), point_count)
+                self.assertEqual(sum(point.retest_sensitivity is not None for point in result.points.values()), retest_count)
+
+
+@unittest.skipUnless(THREE_IN_ONE_SAMPLE_ROOT, "Set HFA_3IN1_SAMPLE_DIR to run the local 3-in-1 sample-corpus tests.")
+class ThreeInOneSampleCorpusTests(unittest.TestCase):
+    def test_full_threshold_macula_is_parsed_without_normative_plots(self):
+        dataset = dcmread(Path(THREE_IN_ONE_SAMPLE_ROOT) / "3in1/test_types/mtt.dcm", stop_before_pixels=True)
+
+        result = parse_hfa_dicom(dataset)
+
+        self.assertIsInstance(result, ThresholdResult)
+        self.assertEqual(result.metadata["field_size"], "3-in-1 Macula")
+        self.assertEqual(result.metadata["strategy"], "Full Threshold")
+        self.assertEqual(result.metadata["laterality"], "Left")
+        self.assertEqual(len(result.points), 16)
+        self.assertEqual(sum(point.retest_sensitivity is not None for point in result.points.values()), 4)
+        self.assertNotIn("md", result.metadata)

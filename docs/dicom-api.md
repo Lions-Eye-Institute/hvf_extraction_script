@@ -10,7 +10,7 @@ dataset = dcmread("visual-field.dcm", stop_before_pixels=True)
 result = parse_hfa_dicom(dataset)
 ```
 
-`parse_hfa_dicom()` accepts a pydicom `Dataset` and returns an `HFAResult`. File I/O deliberately remains outside the package API so callers can obtain datasets from a file, DICOMweb, C-MOVE receiver, or another authorised source.
+`parse_hfa_dicom()` accepts a pydicom `Dataset` and returns an `HFAResult` or `ThresholdResult`. File I/O deliberately remains outside the package API so callers can obtain datasets from a file, DICOMweb, C-MOVE receiver, or another authorised source.
 
 ## Result model
 
@@ -42,6 +42,8 @@ raw_sensitivity = result.raw.at(-3.0, 21.0)
 
 `HFAPlot.values` is immutable. `HFAPlot.coordinates` returns the coordinates contained in the plot.
 
+`ThresholdResult` represents Full Threshold 3-in-1 Macula measurements, which do not include normative/deviation analyses. Its `points` mapping is keyed by source coordinate and contains immutable `ThresholdPoint` values with `sensitivity`, `stimulus_result`, `retest_seen`, and `retest_sensitivity` fields. `ThresholdResult.coordinates` and `ThresholdResult.at(x, y)` provide the equivalent coordinate accessors.
+
 The current parser preserves DICOM numeric values directly:
 
 - `raw`, `tdv`, and `pdv` are integer values or `None` when a value is absent.
@@ -49,7 +51,7 @@ The current parser preserves DICOM numeric values directly:
 
 ## Metadata
 
-`result.metadata` contains only the exported clinical/test fields:
+`HFAResult.metadata` contains these clinical/test fields:
 
 | Key | Value |
 | --- | --- |
@@ -69,6 +71,8 @@ The current parser preserves DICOM numeric values directly:
 
 Patient name, identifier, and date of birth are intentionally not part of this API.
 
+`ThresholdResult.metadata` contains the shared fields through `refraction`, but deliberately excludes `md`, `psd`, `vfi`, and `ght`: those analyses are absent from Full Threshold Macula OPV objects.
+
 ## Supported DICOM contract
 
 The parser accepts only DICOM **Ophthalmic Visual Field Static Perimetry Measurements Storage** objects with these validated Zeiss protocol codes:
@@ -86,9 +90,19 @@ The parser accepts only DICOM **Ophthalmic Visual Field Static Perimetry Measure
 | SITA Fast | `111817` |
 | SITA-Faster | `OPVTS101` |
 
-Pattern and strategy code recognition is independent: the parser accepts any recognised pattern code with any recognised strategy code. It does not restrict inputs to a pattern/strategy combination whitelist.
+SITA pattern and strategy code recognition is independent: the parser accepts any recognised SITA pattern code with any recognised SITA strategy code. It does not restrict SITA inputs to a pattern/strategy combination whitelist.
 
-Pattern-deviation values must be present. Esterman (monocular and binocular) and 3-in-1 macula patterns are explicitly rejected. An unsupported SOP class, protocol code, duplicate coordinate, malformed numeric value, or absent pattern-deviation data raises `UnsupportedHFADataError`.
+| Full Threshold test pattern | Code value |
+| --- | --- |
+| 3-in-1 Macula | `111804` |
+
+| Full Threshold strategy | Code value |
+| --- | --- |
+| Full Threshold | `111818` |
+
+Pattern-deviation values must be present for `HFAResult`. Full Threshold 3-in-1 Macula is recognised only as the combination of the Macula pattern code (`111804`) and Full Threshold strategy code (`111818`), and returns a `ThresholdResult`. Macula paired with another strategy is rejected.
+
+Full Threshold 10-2, 24-2, and 30-2 objects are ambiguous: OPV measurement storage has no indicator of whether they are 3-in-1 tests. The parser logs a warning containing “contact admin” and raises `UnsupportedHFADataError` rather than silently classify them. Esterman remains explicitly rejected. An unsupported SOP class, protocol code, duplicate coordinate, malformed numeric value, or absent pattern-deviation data raises `UnsupportedHFADataError`.
 
 ## Non-goals
 

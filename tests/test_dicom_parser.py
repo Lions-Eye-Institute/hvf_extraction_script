@@ -4,7 +4,7 @@ import unittest
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
 
-from hvf_extraction_script import UnsupportedHFADataError, parse_hfa_dicom
+from hvf_extraction_script import ThresholdResult, UnsupportedHFADataError, parse_hfa_dicom
 
 
 def make_point(x, y, raw, pattern=True):
@@ -63,6 +63,15 @@ def make_dataset(pattern=True):
     strategy_protocol.CodeValue = "OPVTS101"
     dataset.PerformedProtocolCodeSequence = Sequence([pattern_protocol, strategy_protocol])
     dataset.VisualFieldTestPointSequence = Sequence([make_point(3, 3, 28, pattern), make_point(5, 7, 31, pattern)])
+    return dataset
+
+
+def make_full_threshold_macula_dataset():
+    dataset = make_dataset()
+    dataset.PerformedProtocolCodeSequence[0].CodeValue = "111804"
+    dataset.PerformedProtocolCodeSequence[1].CodeValue = "111818"
+    dataset.VisualFieldTestPointSequence[0].RetestStimulusSeen = "YES"
+    dataset.VisualFieldTestPointSequence[0].RetestSensitivityValue = 29
     return dataset
 
 
@@ -154,12 +163,39 @@ class ParseHFADicomTests(unittest.TestCase):
                 with self.assertRaisesRegex(UnsupportedHFADataError, pattern):
                     parse_hfa_dicom(dataset)
 
-    def test_3_in_1_macula_pattern_is_explicitly_rejected(self):
+    def test_full_threshold_macula_returns_non_normative_threshold_points(self):
+        result = parse_hfa_dicom(make_full_threshold_macula_dataset())
+
+        self.assertIsInstance(result, ThresholdResult)
+        self.assertEqual(result.metadata["field_size"], "3-in-1 Macula")
+        self.assertEqual(result.metadata["strategy"], "Full Threshold")
+        self.assertNotIn("md", result.metadata)
+        self.assertEqual(set(result.coordinates), {(3.0, 3.0), (5.0, 7.0)})
+        point = result.at(3.0, 3.0)
+        self.assertEqual(point.sensitivity, 28)
+        self.assertEqual(point.stimulus_result, "SEEN")
+        self.assertTrue(point.retest_seen)
+        self.assertEqual(point.retest_sensitivity, 29)
+
+    def test_macula_requires_full_threshold(self):
         dataset = make_dataset()
         dataset.PerformedProtocolCodeSequence[0].CodeValue = "111804"
 
-        with self.assertRaisesRegex(UnsupportedHFADataError, "3-in-1 Macula"):
+        with self.assertRaisesRegex(UnsupportedHFADataError, "requires the Full Threshold"):
             parse_hfa_dicom(dataset)
+
+    def test_ambiguous_full_threshold_patterns_warn_and_remain_rejected(self):
+        for code, pattern in (("111801", "10-2"), ("111800", "24-2"), ("111802", "30-2")):
+            with self.subTest(pattern=pattern):
+                dataset = make_dataset()
+                dataset.PerformedProtocolCodeSequence[0].CodeValue = code
+                dataset.PerformedProtocolCodeSequence[1].CodeValue = "111818"
+
+                with self.assertLogs("hvf_extraction_script.dicom", "WARNING") as logs:
+                    with self.assertRaisesRegex(UnsupportedHFADataError, "contact admin"):
+                        parse_hfa_dicom(dataset)
+                self.assertIn(f"Full Threshold {pattern}", logs.output[0])
+                self.assertIn("contact admin", logs.output[0])
 
     def test_zeiss_protocol_codes_for_supported_patterns_and_strategies(self):
         cases = [

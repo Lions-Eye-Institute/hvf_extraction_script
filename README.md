@@ -23,13 +23,14 @@ from hvf_extraction_script import parse_hfa_dicom
 dataset = dcmread("visual-field.dcm", stop_before_pixels=True)
 result = parse_hfa_dicom(dataset)
 
+# For standard SITA results:
 coordinate = (-3.0, 21.0)
 raw_sensitivity = result.raw.at(*coordinate)
 total_deviation = result.tdv.values[coordinate]
 pattern_deviation_probability = result.pdp.values[coordinate]
 ```
 
-Each of the five plots is keyed by its original DICOM `(x, y)` test-point coordinate:
+Standard SITA results provide five plots keyed by their original DICOM `(x, y)` test-point coordinate:
 
 - `result.raw` — raw sensitivity
 - `result.tdv` — total deviation value
@@ -41,7 +42,7 @@ See [the DICOM API reference](docs/dicom-api.md) for metadata, return types, sup
 
 ## Supported inputs
 
-The parser recognises these validated Zeiss protocol codes independently. This is not a pattern/strategy combination whitelist: any recognised pattern code may be paired with any recognised strategy code.
+The parser recognises these validated Zeiss SITA protocol codes independently. This is not a pattern/strategy combination whitelist: any recognised SITA pattern code may be paired with any recognised SITA strategy code.
 
 | Test pattern | Code value |
 | --- | --- |
@@ -56,7 +57,15 @@ The parser recognises these validated Zeiss protocol codes independently. This i
 | SITA Fast | `111817` |
 | SITA-Faster | `OPVTS101` |
 
-Esterman (monocular and binocular) and 3-in-1 macula tests are explicitly unsupported. Other unsupported protocol codes or absent pattern-deviation data raise `UnsupportedHFADataError`.
+| Test pattern | Code value |
+| --- | --- |
+| 3-in-1 Macula | `111804` |
+
+| Strategy | Code value |
+| --- | --- |
+| Full Threshold | `111818` |
+
+Full Threshold 3-in-1 Macula tests are returned as `ThresholdResult`, with coordinate-keyed point measurements rather than normative/deviation plots. The OPV measurement object does not contain the rendered report or normative analysis. Full Threshold 10-2, 24-2, and 30-2 objects are ambiguous: the OPV object cannot identify whether they are 3-in-1 tests, so the parser logs a warning containing “contact admin” and raises `UnsupportedHFADataError`.
 
 ## Testing
 
@@ -70,6 +79,13 @@ The anonymised HFA sample corpus remains outside the repository. To run its inte
 
 ```shell
 HFA_SAMPLE_DIR=/path/to/all_hvf_samples \
+  uv run python -m unittest discover -s tests -v
+```
+
+To include the local 3-in-1 Macula corpus:
+
+```shell
+HFA_3IN1_SAMPLE_DIR=/path/to/all_3in1_samples \
   uv run python -m unittest discover -s tests -v
 ```
 

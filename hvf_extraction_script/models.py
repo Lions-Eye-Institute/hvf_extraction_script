@@ -5,11 +5,12 @@
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping, TypeAlias
+from typing import Literal, Mapping, TypeAlias
 
 
 Coordinate: TypeAlias = tuple[float, float]
 PlotValue: TypeAlias = int | float | None
+StimulusResult: TypeAlias = Literal["SEEN", "NOT SEEN"]
 
 
 class UnsupportedHFADataError(ValueError):
@@ -44,3 +45,32 @@ class HFAResult:
     tdp: HFAPlot
     pdv: HFAPlot
     pdp: HFAPlot
+
+
+@dataclass(frozen=True)
+class ThresholdPoint:
+    """One non-normative threshold measurement at a visual-field coordinate."""
+
+    sensitivity: int
+    stimulus_result: StimulusResult
+    retest_seen: bool | None
+    retest_sensitivity: int | None
+
+
+@dataclass(frozen=True)
+class ThresholdResult:
+    """Full Threshold measurements without normative/deviation analyses."""
+
+    metadata: Mapping[str, object]
+    points: Mapping[Coordinate, ThresholdPoint]
+
+    @classmethod
+    def from_points(cls, metadata: Mapping[str, object], points: Mapping[Coordinate, ThresholdPoint]) -> "ThresholdResult":
+        return cls(MappingProxyType(dict(metadata)), MappingProxyType(dict(points)))
+
+    @property
+    def coordinates(self) -> tuple[Coordinate, ...]:
+        return tuple(self.points)
+
+    def at(self, x: float, y: float) -> ThresholdPoint:
+        return self.points[(x, y)]
