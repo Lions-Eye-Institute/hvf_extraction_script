@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hvf-extraction-script"
-version = "0.1.2"
+version = "0.1.3"
 description = "Coordinate-first parser for HFA static-perimetry DICOM objects."
 readme = "README.md"
 requires-python = ">=3.12"
