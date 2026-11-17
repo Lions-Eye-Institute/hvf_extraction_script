@@ -90,7 +90,41 @@ def set_ght(dataset, scheme, code):
     dataset.VisualFieldGlobalResultsIndexSequence = Sequence([index])
 
 
+def add_vfi(dataset, value, code="111852", meaning="Visual Field Index"):
+    name = Dataset()
+    name.CodingSchemeDesignator = "DCM"
+    name.CodeValue = code
+    name.CodeMeaning = meaning
+    observation = Dataset()
+    observation.ConceptNameCodeSequence = Sequence([name])
+    observation.NumericValue = value
+    index = Dataset()
+    index.DataObservationSequence = Sequence([observation])
+    existing = list(getattr(dataset, "VisualFieldGlobalResultsIndexSequence", None) or [])
+    dataset.VisualFieldGlobalResultsIndexSequence = Sequence([*existing, index])
+
+
 class ParseHFADicomTests(unittest.TestCase):
+    def test_vfi_is_matched_by_concept_code(self):
+        cases = [
+            ("standard meaning", "111852", "Visual Field Index", 92),
+            ("different meaning", "111852", "VFI", 92),
+            ("meaning without the code", "999999", "Visual Field Index", None),
+        ]
+        for name, code, meaning, expected in cases:
+            with self.subTest(name):
+                dataset = make_dataset()
+                set_ght(dataset, "DCM", "111847")
+                add_vfi(dataset, 92, code=code, meaning=meaning)
+
+                result = parse_hfa_dicom(dataset)
+
+                self.assertEqual(result.metadata["vfi"], expected)
+                self.assertEqual(result.metadata["ght"], "ONL")
+
+    def test_missing_vfi_is_none(self):
+        self.assertIsNone(parse_hfa_dicom(make_dataset()).metadata["vfi"])
+
     def test_returns_five_coordinate_keyed_plots(self):
         result = parse_hfa_dicom(make_dataset())
 

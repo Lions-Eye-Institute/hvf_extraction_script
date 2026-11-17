@@ -66,6 +66,12 @@ class SampleCorpusTests(unittest.TestCase):
                 self.assertEqual(result.metadata["laterality"], laterality)
                 self.assertEqual(result.metadata["fovea"], fovea)
                 self.assertEqual(result.metadata["ght"], ght)
+                # VFI and GHT come from the same global-results section, so a
+                # sample has both or neither (10-2 has neither).
+                if ght is None:
+                    self.assertIsNone(result.metadata["vfi"])
+                else:
+                    self.assertIsNotNone(result.metadata["vfi"])
                 self.assertEqual(len(result.raw.values), point_count)
                 self.assertEqual(set(result.raw.coordinates), set(result.tdv.coordinates))
                 self.assertEqual(set(result.raw.coordinates), set(result.tdp.coordinates))

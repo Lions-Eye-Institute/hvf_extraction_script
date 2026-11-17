@@ -45,6 +45,8 @@ AMBIGUOUS_FULL_THRESHOLD_PATTERNS = {
     "111801": "10-2",
     "111802": "30-2",
 }
+# Matched by code rather than CodeMeaning text, like the GHT concept below.
+VFI_CONCEPT_CODE = ("DCM", "111852")  # Visual Field Index
 GHT_RESULT_CODES = {
     ("DCM", "111849"): "Abnormally High",
     ("DCM", "111848"): "Borderline",
@@ -245,7 +247,8 @@ def _vfi(dataset: Dataset) -> int | None:
     for index in _sequence(dataset, "VisualFieldGlobalResultsIndexSequence"):
         observation = _first(_sequence(index, "DataObservationSequence"))
         concept = _first(_sequence(observation, "ConceptNameCodeSequence"))
-        if str(getattr(concept, "CodeMeaning", "")) == "Visual Field Index":
+        name = str(getattr(concept, "CodingSchemeDesignator", "")), str(getattr(concept, "CodeValue", ""))
+        if name == VFI_CONCEPT_CODE:
             return _number(getattr(observation, "NumericValue", None), integer=True)
     return None
 

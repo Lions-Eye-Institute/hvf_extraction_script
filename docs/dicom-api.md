@@ -66,7 +66,7 @@ The current parser preserves DICOM numeric values directly:
 | `pupil_diameter` | float or `None` |
 | `refraction` | mapping with `sphere`, `cylinder`, and `axis` |
 | `md`, `psd` | float or `None` |
-| `vfi` | integer percentage value or `None` |
+| `vfi` | integer percentage value, read from the global-results observation with concept code `DCM 111852` (Visual Field Index); `None` when absent, as for 10-2 tests |
 | `ght` | `Abnormally High`, `Borderline`, `Borderline / General Reduction`, `General Reduction of Sensitivity`, `WNL`, `ONL`, or `None` when no GHT result is present |
 
 Patient name, identifier, and date of birth are intentionally not part of this API.
