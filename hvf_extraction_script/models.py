@@ -17,6 +17,19 @@ class UnsupportedHFADataError(ValueError):
     """The DICOM object is outside this fork's supported HFA contract."""
 
 
+class InvalidHFADataError(UnsupportedHFADataError):
+    """A supported HFA test type whose data is malformed or incomplete.
+
+    Raised for problems with this particular object's values (duplicate or
+    missing coordinates, non-numeric values, invalid codes within a point,
+    and similar) rather than for an unsupported test type. Callers can
+    therefore treat it as a data problem that may be retried, while plain
+    ``UnsupportedHFADataError`` means the test type itself is out of scope.
+    It subclasses ``UnsupportedHFADataError`` so existing handlers still
+    catch it.
+    """
+
+
 @dataclass(frozen=True)
 class HFAPlot:
     """One pointwise HFA measurement, indexed by its source coordinate."""
@@ -37,7 +50,11 @@ class HFAPlot:
 
 @dataclass(frozen=True)
 class HFAResult:
-    """Parsed HFA data with five coordinate-keyed pointwise plots."""
+    """Parsed HFA data with five coordinate-keyed pointwise plots.
+
+    ``warnings`` lists problems that left a field blank without rejecting the
+    test, such as an unrecognised Glaucoma Hemifield Test result code.
+    """
 
     metadata: Mapping[str, object]
     raw: HFAPlot
@@ -45,13 +62,14 @@ class HFAResult:
     tdp: HFAPlot
     pdv: HFAPlot
     pdp: HFAPlot
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class ThresholdPoint:
     """One non-normative threshold measurement at a visual-field coordinate."""
 
-    sensitivity: int
+    sensitivity: int | None
     stimulus_result: StimulusResult
     retest_seen: bool | None
     retest_sensitivity: int | None
@@ -59,14 +77,23 @@ class ThresholdPoint:
 
 @dataclass(frozen=True)
 class ThresholdResult:
-    """Full Threshold measurements without normative/deviation analyses."""
+    """Full Threshold measurements without normative/deviation analyses.
+
+    ``warnings`` has the same meaning as on ``HFAResult``.
+    """
 
     metadata: Mapping[str, object]
     points: Mapping[Coordinate, ThresholdPoint]
+    warnings: tuple[str, ...] = ()
 
     @classmethod
-    def from_points(cls, metadata: Mapping[str, object], points: Mapping[Coordinate, ThresholdPoint]) -> "ThresholdResult":
-        return cls(MappingProxyType(dict(metadata)), MappingProxyType(dict(points)))
+    def from_points(
+        cls,
+        metadata: Mapping[str, object],
+        points: Mapping[Coordinate, ThresholdPoint],
+        warnings: tuple[str, ...] = (),
+    ) -> "ThresholdResult":
+        return cls(MappingProxyType(dict(metadata)), MappingProxyType(dict(points)), tuple(warnings))
 
     @property
     def coordinates(self) -> tuple[Coordinate, ...]:

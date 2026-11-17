@@ -4,7 +4,7 @@ import unittest
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
 
-from hvf_extraction_script import ThresholdResult, UnsupportedHFADataError, parse_hfa_dicom
+from hvf_extraction_script import InvalidHFADataError, ThresholdResult, UnsupportedHFADataError, parse_hfa_dicom
 
 
 def make_point(x, y, raw, pattern=True):
@@ -90,7 +90,41 @@ def set_ght(dataset, scheme, code):
     dataset.VisualFieldGlobalResultsIndexSequence = Sequence([index])
 
 
+def add_vfi(dataset, value, code="111852", meaning="Visual Field Index"):
+    name = Dataset()
+    name.CodingSchemeDesignator = "DCM"
+    name.CodeValue = code
+    name.CodeMeaning = meaning
+    observation = Dataset()
+    observation.ConceptNameCodeSequence = Sequence([name])
+    observation.NumericValue = value
+    index = Dataset()
+    index.DataObservationSequence = Sequence([observation])
+    existing = list(getattr(dataset, "VisualFieldGlobalResultsIndexSequence", None) or [])
+    dataset.VisualFieldGlobalResultsIndexSequence = Sequence([*existing, index])
+
+
 class ParseHFADicomTests(unittest.TestCase):
+    def test_vfi_is_matched_by_concept_code(self):
+        cases = [
+            ("standard meaning", "111852", "Visual Field Index", 92),
+            ("different meaning", "111852", "VFI", 92),
+            ("meaning without the code", "999999", "Visual Field Index", None),
+        ]
+        for name, code, meaning, expected in cases:
+            with self.subTest(name):
+                dataset = make_dataset()
+                set_ght(dataset, "DCM", "111847")
+                add_vfi(dataset, 92, code=code, meaning=meaning)
+
+                result = parse_hfa_dicom(dataset)
+
+                self.assertEqual(result.metadata["vfi"], expected)
+                self.assertEqual(result.metadata["ght"], "ONL")
+
+    def test_missing_vfi_is_none(self):
+        self.assertIsNone(parse_hfa_dicom(make_dataset()).metadata["vfi"])
+
     def test_returns_five_coordinate_keyed_plots(self):
         result = parse_hfa_dicom(make_dataset())
 
@@ -133,12 +167,37 @@ class ParseHFADicomTests(unittest.TestCase):
 
                 self.assertEqual(parse_hfa_dicom(dataset).metadata["ght"], expected)
 
-    def test_unknown_ght_code_is_out_of_scope(self):
+    def test_unknown_ght_code_leaves_ght_blank_with_a_warning(self):
         dataset = make_dataset()
-        set_ght(dataset, "DCM", "UNKNOWN")
+        set_ght(dataset, "DCM", "111999")
+        dataset.VisualFieldGlobalResultsIndexSequence[0].DataObservationSequence[0].ConceptCodeSequence[0].CodeMeaning = "Something New"
 
-        with self.assertRaisesRegex(UnsupportedHFADataError, "Glaucoma Hemifield Test"):
-            parse_hfa_dicom(dataset)
+        result = parse_hfa_dicom(dataset)
+
+        self.assertIsNone(result.metadata["ght"])
+        self.assertEqual(
+            result.warnings,
+            ("Unrecognised Glaucoma Hemifield Test result code DCM:111999 ('Something New'); GHT left blank.",),
+        )
+        self.assertEqual(result.raw.at(3.0, 3.0), 28)
+
+    def test_unknown_ght_code_without_meaning_names_only_the_code(self):
+        dataset = make_dataset()
+        set_ght(dataset, "DCM", "111999")
+
+        result = parse_hfa_dicom(dataset)
+
+        self.assertEqual(
+            result.warnings,
+            ("Unrecognised Glaucoma Hemifield Test result code DCM:111999; GHT left blank.",),
+        )
+
+    def test_results_have_no_warnings_by_default(self):
+        dataset = make_dataset()
+        set_ght(dataset, "DCM", "111847")
+
+        self.assertEqual(parse_hfa_dicom(dataset).warnings, ())
+        self.assertEqual(parse_hfa_dicom(make_full_threshold_macula_dataset()).warnings, ())
 
     def test_missing_pattern_deviation_is_out_of_scope(self):
         with self.assertRaisesRegex(UnsupportedHFADataError, "Pattern deviation"):
@@ -183,6 +242,72 @@ class ParseHFADicomTests(unittest.TestCase):
 
         with self.assertRaisesRegex(UnsupportedHFADataError, "requires the Full Threshold"):
             parse_hfa_dicom(dataset)
+
+    def test_macula_point_without_sensitivity_is_returned_as_none(self):
+        dataset = make_full_threshold_macula_dataset()
+        del dataset.VisualFieldTestPointSequence[1].SensitivityValue
+
+        result = parse_hfa_dicom(dataset)
+
+        self.assertIsInstance(result, ThresholdResult)
+        self.assertIsNone(result.at(5.0, 7.0).sensitivity)
+        self.assertEqual(result.at(5.0, 7.0).stimulus_result, "SEEN")
+        self.assertEqual(result.at(3.0, 3.0).sensitivity, 28)
+
+    def test_data_problems_raise_invalid_data_error(self):
+        def duplicate_coordinate(dataset):
+            dataset.VisualFieldTestPointSequence[1].VisualFieldTestPointXCoordinate = 3
+            dataset.VisualFieldTestPointSequence[1].VisualFieldTestPointYCoordinate = 3
+
+        def non_numeric_sensitivity(dataset):
+            dataset.VisualFieldTestPointSequence[0].SensitivityValue = "abc"
+
+        def invalid_study_date(dataset):
+            dataset.StudyDate = "2026-07"
+
+        def invalid_laterality(dataset):
+            dataset.Laterality = "B"
+
+        def invalid_stimulus_result(dataset):
+            dataset.VisualFieldTestPointSequence[0].StimulusResults = "MAYBE"
+
+        cases = [
+            ("standard duplicate coordinate", make_dataset, duplicate_coordinate, "Duplicate"),
+            ("standard non-numeric sensitivity", make_dataset, non_numeric_sensitivity, "numeric"),
+            ("standard invalid study date", make_dataset, invalid_study_date, "StudyDate"),
+            ("standard invalid laterality", make_dataset, invalid_laterality, "Laterality"),
+            ("macula duplicate coordinate", make_full_threshold_macula_dataset, duplicate_coordinate, "Duplicate"),
+            ("macula invalid stimulus result", make_full_threshold_macula_dataset, invalid_stimulus_result, "StimulusResults"),
+        ]
+        for name, factory, corrupt, pattern in cases:
+            with self.subTest(name):
+                dataset = factory()
+                corrupt(dataset)
+
+                with self.assertRaisesRegex(InvalidHFADataError, pattern):
+                    parse_hfa_dicom(dataset)
+
+    def test_unsupported_test_types_are_not_invalid_data(self):
+        def unknown_pattern(dataset):
+            dataset.PerformedProtocolCodeSequence[0].CodeValue = "UNKNOWN"
+
+        def esterman(dataset):
+            dataset.PerformedProtocolCodeSequence[0].CodeValue = "OPVTP117"
+
+        def macula_without_full_threshold(dataset):
+            dataset.PerformedProtocolCodeSequence[0].CodeValue = "111804"
+
+        def wrong_sop_class(dataset):
+            dataset.SOPClassUID = "1.2.3"
+
+        for corrupt in (unknown_pattern, esterman, macula_without_full_threshold, wrong_sop_class):
+            with self.subTest(corrupt.__name__):
+                dataset = make_dataset()
+                corrupt(dataset)
+
+                with self.assertRaises(UnsupportedHFADataError) as context:
+                    parse_hfa_dicom(dataset)
+                self.assertNotIsInstance(context.exception, InvalidHFADataError)
 
     def test_ambiguous_full_threshold_patterns_warn_and_remain_rejected(self):
         for code, pattern in (("111801", "10-2"), ("111800", "24-2"), ("111802", "30-2")):

@@ -82,10 +82,17 @@ HFA_SAMPLE_DIR=/path/to/all_hvf_samples \
   uv run python -m unittest discover -s tests -v
 ```
 
-To include the local 3-in-1 Macula corpus:
+To include the local 3-in-1 Macula corpus (the directory containing `3in1/test_types/mtt.dcm`):
 
 ```shell
 HFA_3IN1_SAMPLE_DIR=/path/to/all_3in1_samples \
+  uv run python -m unittest discover -s tests -v
+```
+
+To include the rejected-sample checks (the directory containing `esterman-binocular.dcm` and `esterman-monocular.dcm`):
+
+```shell
+HFA_REJECTS_DIR=/path/to/rejects \
   uv run python -m unittest discover -s tests -v
 ```
 
