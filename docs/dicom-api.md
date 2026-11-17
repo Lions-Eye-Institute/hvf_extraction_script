@@ -42,7 +42,7 @@ raw_sensitivity = result.raw.at(-3.0, 21.0)
 
 `HFAPlot.values` is immutable. `HFAPlot.coordinates` returns the coordinates contained in the plot.
 
-`ThresholdResult` represents Full Threshold 3-in-1 Macula measurements, which do not include normative/deviation analyses. Its `points` mapping is keyed by source coordinate and contains immutable `ThresholdPoint` values with `sensitivity`, `stimulus_result`, `retest_seen`, and `retest_sensitivity` fields. `ThresholdResult.coordinates` and `ThresholdResult.at(x, y)` provide the equivalent coordinate accessors.
+`ThresholdResult` represents Full Threshold 3-in-1 Macula measurements, which do not include normative/deviation analyses. Its `points` mapping is keyed by source coordinate and contains immutable `ThresholdPoint` values with `sensitivity`, `stimulus_result`, `retest_seen`, and `retest_sensitivity` fields. `sensitivity` is `None` when a point has no `SensitivityValue`; the rest of the result is still returned, so callers decide how to report the gap. `ThresholdResult.coordinates` and `ThresholdResult.at(x, y)` provide the equivalent coordinate accessors.
 
 The current parser preserves DICOM numeric values directly:
 
@@ -102,7 +102,9 @@ SITA pattern and strategy code recognition is independent: the parser accepts an
 
 Pattern-deviation values must be present for `HFAResult`. Full Threshold 3-in-1 Macula is recognised only as the combination of the Macula pattern code (`111804`) and Full Threshold strategy code (`111818`), and returns a `ThresholdResult`. Macula paired with another strategy is rejected.
 
-Full Threshold 10-2, 24-2, and 30-2 objects are ambiguous: OPV measurement storage has no indicator of whether they are 3-in-1 tests. The parser logs a warning containing “contact admin” and raises `UnsupportedHFADataError` rather than silently classify them. Esterman remains explicitly rejected. An unsupported SOP class, protocol code, duplicate coordinate, malformed numeric value, or absent pattern-deviation data raises `UnsupportedHFADataError`.
+Full Threshold 10-2, 24-2, and 30-2 objects are ambiguous: OPV measurement storage has no indicator of whether they are 3-in-1 tests. The parser logs a warning containing “contact admin” and raises `UnsupportedHFADataError` rather than silently classify them. Esterman remains explicitly rejected. An unsupported SOP class, protocol code, Glaucoma Hemifield Test result code, or absent pattern-deviation data raises `UnsupportedHFADataError`: the test type is out of scope.
+
+Problems with the data of an otherwise supported test raise `InvalidHFADataError`, a subclass of `UnsupportedHFADataError`. These include a duplicate or missing coordinate, an empty test-point sequence, a point without its normals sequence, an invalid `StimulusResults` or `RetestStimulusSeen` value, a malformed numeric value or study date, laterality other than R or L, and a missing `FovealSensitivity` when it is marked as measured. Catch `InvalidHFADataError` first to tell a data problem apart from an unsupported test type; existing `UnsupportedHFADataError` handlers catch both.
 
 ## Non-goals
 

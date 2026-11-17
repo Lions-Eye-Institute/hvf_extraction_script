@@ -4,6 +4,14 @@
 """DICOM-only HFA parsing package."""
 
 from .dicom import parse_hfa_dicom
-from .models import HFAPlot, HFAResult, ThresholdPoint, ThresholdResult, UnsupportedHFADataError
+from .models import HFAPlot, HFAResult, InvalidHFADataError, ThresholdPoint, ThresholdResult, UnsupportedHFADataError
 
-__all__ = ["HFAPlot", "HFAResult", "ThresholdPoint", "ThresholdResult", "UnsupportedHFADataError", "parse_hfa_dicom"]
+__all__ = [
+    "HFAPlot",
+    "HFAResult",
+    "InvalidHFADataError",
+    "ThresholdPoint",
+    "ThresholdResult",
+    "UnsupportedHFADataError",
+    "parse_hfa_dicom",
+]

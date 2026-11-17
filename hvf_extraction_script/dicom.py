@@ -12,7 +12,16 @@ from typing import Any
 
 from pydicom.dataset import Dataset
 
-from .models import Coordinate, HFAPlot, HFAResult, PlotValue, ThresholdPoint, ThresholdResult, UnsupportedHFADataError
+from .models import (
+    Coordinate,
+    HFAPlot,
+    HFAResult,
+    InvalidHFADataError,
+    PlotValue,
+    ThresholdPoint,
+    ThresholdResult,
+    UnsupportedHFADataError,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -76,10 +85,10 @@ def parse_hfa_dicom(dataset: Dataset) -> HFAResult | ThresholdResult:
     for point in _sequence(dataset, "VisualFieldTestPointSequence"):
         coordinate = _coordinate(point)
         if coordinate in plots["raw"]:
-            raise UnsupportedHFADataError(f"Duplicate visual-field coordinate {coordinate!r}.")
+            raise InvalidHFADataError(f"Duplicate visual-field coordinate {coordinate!r}.")
         normals = _first(_sequence(point, "VisualFieldTestPointNormalsSequence"))
         if not normals:
-            raise UnsupportedHFADataError(f"Point {coordinate!r} has no VisualFieldTestPointNormalsSequence.")
+            raise InvalidHFADataError(f"Point {coordinate!r} has no VisualFieldTestPointNormalsSequence.")
         plots["raw"][coordinate] = _number(getattr(point, "SensitivityValue", None), integer=True)
         plots["tdv"][coordinate] = _number(getattr(normals, "AgeCorrectedSensitivityDeviationValue", None), integer=True)
         plots["tdp"][coordinate] = _number(getattr(normals, "AgeCorrectedSensitivityDeviationProbabilityValue", None))
@@ -87,7 +96,7 @@ def parse_hfa_dicom(dataset: Dataset) -> HFAResult | ThresholdResult:
         plots["pdp"][coordinate] = _number(getattr(normals, "GeneralizedDefectCorrectedSensitivityDeviationProbabilityValue", None))
 
     if not plots["raw"]:
-        raise UnsupportedHFADataError("VisualFieldTestPointSequence is empty.")
+        raise InvalidHFADataError("VisualFieldTestPointSequence is empty.")
 
     return HFAResult(
         metadata=_metadata(dataset, field_size, strategy),
@@ -104,13 +113,11 @@ def _parse_threshold(dataset: Dataset, field_size: str) -> ThresholdResult:
     for point in _sequence(dataset, "VisualFieldTestPointSequence"):
         coordinate = _coordinate(point)
         if coordinate in points:
-            raise UnsupportedHFADataError(f"Duplicate visual-field coordinate {coordinate!r}.")
+            raise InvalidHFADataError(f"Duplicate visual-field coordinate {coordinate!r}.")
         sensitivity = _number(getattr(point, "SensitivityValue", None), integer=True)
-        if sensitivity is None:
-            raise UnsupportedHFADataError(f"Point {coordinate!r} has no SensitivityValue.")
         stimulus_result = str(getattr(point, "StimulusResults", ""))
         if stimulus_result not in {"SEEN", "NOT SEEN"}:
-            raise UnsupportedHFADataError(f"Point {coordinate!r} has unsupported StimulusResults {stimulus_result!r}.")
+            raise InvalidHFADataError(f"Point {coordinate!r} has unsupported StimulusResults {stimulus_result!r}.")
         retest_seen = _yes_no(getattr(point, "RetestStimulusSeen", None), "RetestStimulusSeen", coordinate)
         points[coordinate] = ThresholdPoint(
             sensitivity=sensitivity,
@@ -119,14 +126,14 @@ def _parse_threshold(dataset: Dataset, field_size: str) -> ThresholdResult:
             retest_sensitivity=_number(getattr(point, "RetestSensitivityValue", None), integer=True),
         )
     if not points:
-        raise UnsupportedHFADataError("VisualFieldTestPointSequence is empty.")
+        raise InvalidHFADataError("VisualFieldTestPointSequence is empty.")
     return ThresholdResult.from_points(_metadata(dataset, field_size, "Full Threshold", include_global_indices=False), points)
 
 
 def _metadata(dataset: Dataset, field_size: str, strategy: str, *, include_global_indices: bool = True) -> dict[str, object]:
     laterality = {"R": "Right", "L": "Left"}.get(str(getattr(dataset, "Laterality", "")))
     if laterality is None:
-        raise UnsupportedHFADataError("Laterality must be R or L.")
+        raise InvalidHFADataError("Laterality must be R or L.")
     fixation = _first(_sequence(dataset, "FixationSequence"))
     catch_trial = _first(_sequence(dataset, "VisualFieldCatchTrialSequence"))
     results = _first(_sequence(dataset, "ResultsNormalsSequence"))
@@ -208,7 +215,7 @@ def _coordinate(point: Dataset) -> Coordinate:
     try:
         return float(point.VisualFieldTestPointXCoordinate), float(point.VisualFieldTestPointYCoordinate)
     except AttributeError as error:
-        raise UnsupportedHFADataError("A visual-field test point has no coordinate.") from error
+        raise InvalidHFADataError("A visual-field test point has no coordinate.") from error
 
 
 def _clinical_eye(dataset: Dataset, laterality: str) -> Dataset:
@@ -221,7 +228,7 @@ def _fovea(dataset: Dataset) -> int | str:
         return "OFF"
     value = _number(getattr(dataset, "FovealSensitivity", None))
     if value is None:
-        raise UnsupportedHFADataError("FovealSensitivity is absent although FovealSensitivityMeasured is YES.")
+        raise InvalidHFADataError("FovealSensitivity is absent although FovealSensitivityMeasured is YES.")
     return int(value)
 
 
@@ -277,7 +284,7 @@ def _date(value: Any) -> date | None:
     try:
         return date(int(text[0:4]), int(text[4:6]), int(text[6:8]))
     except (TypeError, ValueError) as error:
-        raise UnsupportedHFADataError(f"StudyDate {text!r} is not a valid YYYYMMDD date.") from error
+        raise InvalidHFADataError(f"StudyDate {text!r} is not a valid YYYYMMDD date.") from error
 
 
 def _sequence(dataset: Dataset, attribute: str) -> list[Dataset]:
@@ -294,7 +301,7 @@ def _number(value: Any, integer: bool = False) -> int | float | None:
     try:
         number = float(value)
     except (TypeError, ValueError) as error:
-        raise UnsupportedHFADataError(f"Expected a numeric DICOM value, got {value!r}.") from error
+        raise InvalidHFADataError(f"Expected a numeric DICOM value, got {value!r}.") from error
     return int(number) if integer else number
 
 
@@ -306,4 +313,4 @@ def _yes_no(value: Any, attribute: str, coordinate: Coordinate) -> bool | None:
         return True
     if text == "NO":
         return False
-    raise UnsupportedHFADataError(f"Point {coordinate!r} has invalid {attribute} value {text!r}.")
+    raise InvalidHFADataError(f"Point {coordinate!r} has invalid {attribute} value {text!r}.")
