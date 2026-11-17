@@ -167,12 +167,37 @@ class ParseHFADicomTests(unittest.TestCase):
 
                 self.assertEqual(parse_hfa_dicom(dataset).metadata["ght"], expected)
 
-    def test_unknown_ght_code_is_out_of_scope(self):
+    def test_unknown_ght_code_leaves_ght_blank_with_a_warning(self):
         dataset = make_dataset()
-        set_ght(dataset, "DCM", "UNKNOWN")
+        set_ght(dataset, "DCM", "111999")
+        dataset.VisualFieldGlobalResultsIndexSequence[0].DataObservationSequence[0].ConceptCodeSequence[0].CodeMeaning = "Something New"
 
-        with self.assertRaisesRegex(UnsupportedHFADataError, "Glaucoma Hemifield Test"):
-            parse_hfa_dicom(dataset)
+        result = parse_hfa_dicom(dataset)
+
+        self.assertIsNone(result.metadata["ght"])
+        self.assertEqual(
+            result.warnings,
+            ("Unrecognised Glaucoma Hemifield Test result code DCM:111999 ('Something New'); GHT left blank.",),
+        )
+        self.assertEqual(result.raw.at(3.0, 3.0), 28)
+
+    def test_unknown_ght_code_without_meaning_names_only_the_code(self):
+        dataset = make_dataset()
+        set_ght(dataset, "DCM", "111999")
+
+        result = parse_hfa_dicom(dataset)
+
+        self.assertEqual(
+            result.warnings,
+            ("Unrecognised Glaucoma Hemifield Test result code DCM:111999; GHT left blank.",),
+        )
+
+    def test_results_have_no_warnings_by_default(self):
+        dataset = make_dataset()
+        set_ght(dataset, "DCM", "111847")
+
+        self.assertEqual(parse_hfa_dicom(dataset).warnings, ())
+        self.assertEqual(parse_hfa_dicom(make_full_threshold_macula_dataset()).warnings, ())
 
     def test_missing_pattern_deviation_is_out_of_scope(self):
         with self.assertRaisesRegex(UnsupportedHFADataError, "Pattern deviation"):
@@ -275,10 +300,7 @@ class ParseHFADicomTests(unittest.TestCase):
         def wrong_sop_class(dataset):
             dataset.SOPClassUID = "1.2.3"
 
-        def unknown_ght(dataset):
-            set_ght(dataset, "DCM", "UNKNOWN")
-
-        for corrupt in (unknown_pattern, esterman, macula_without_full_threshold, wrong_sop_class, unknown_ght):
+        for corrupt in (unknown_pattern, esterman, macula_without_full_threshold, wrong_sop_class):
             with self.subTest(corrupt.__name__):
                 dataset = make_dataset()
                 corrupt(dataset)

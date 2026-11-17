@@ -50,7 +50,11 @@ class HFAPlot:
 
 @dataclass(frozen=True)
 class HFAResult:
-    """Parsed HFA data with five coordinate-keyed pointwise plots."""
+    """Parsed HFA data with five coordinate-keyed pointwise plots.
+
+    ``warnings`` lists problems that left a field blank without rejecting the
+    test, such as an unrecognised Glaucoma Hemifield Test result code.
+    """
 
     metadata: Mapping[str, object]
     raw: HFAPlot
@@ -58,6 +62,7 @@ class HFAResult:
     tdp: HFAPlot
     pdv: HFAPlot
     pdp: HFAPlot
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -72,14 +77,23 @@ class ThresholdPoint:
 
 @dataclass(frozen=True)
 class ThresholdResult:
-    """Full Threshold measurements without normative/deviation analyses."""
+    """Full Threshold measurements without normative/deviation analyses.
+
+    ``warnings`` has the same meaning as on ``HFAResult``.
+    """
 
     metadata: Mapping[str, object]
     points: Mapping[Coordinate, ThresholdPoint]
+    warnings: tuple[str, ...] = ()
 
     @classmethod
-    def from_points(cls, metadata: Mapping[str, object], points: Mapping[Coordinate, ThresholdPoint]) -> "ThresholdResult":
-        return cls(MappingProxyType(dict(metadata)), MappingProxyType(dict(points)))
+    def from_points(
+        cls,
+        metadata: Mapping[str, object],
+        points: Mapping[Coordinate, ThresholdPoint],
+        warnings: tuple[str, ...] = (),
+    ) -> "ThresholdResult":
+        return cls(MappingProxyType(dict(metadata)), MappingProxyType(dict(points)), tuple(warnings))
 
     @property
     def coordinates(self) -> tuple[Coordinate, ...]:

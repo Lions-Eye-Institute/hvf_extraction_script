@@ -100,13 +100,15 @@ def parse_hfa_dicom(dataset: Dataset) -> HFAResult | ThresholdResult:
     if not plots["raw"]:
         raise InvalidHFADataError("VisualFieldTestPointSequence is empty.")
 
+    warnings: list[str] = []
     return HFAResult(
-        metadata=_metadata(dataset, field_size, strategy),
+        metadata=_metadata(dataset, field_size, strategy, warnings=warnings),
         raw=HFAPlot.from_values(plots["raw"]),
         tdv=HFAPlot.from_values(plots["tdv"]),
         tdp=HFAPlot.from_values(plots["tdp"]),
         pdv=HFAPlot.from_values(plots["pdv"]),
         pdp=HFAPlot.from_values(plots["pdp"]),
+        warnings=tuple(warnings),
     )
 
 
@@ -132,7 +134,15 @@ def _parse_threshold(dataset: Dataset, field_size: str) -> ThresholdResult:
     return ThresholdResult.from_points(_metadata(dataset, field_size, "Full Threshold", include_global_indices=False), points)
 
 
-def _metadata(dataset: Dataset, field_size: str, strategy: str, *, include_global_indices: bool = True) -> dict[str, object]:
+def _metadata(
+    dataset: Dataset,
+    field_size: str,
+    strategy: str,
+    *,
+    include_global_indices: bool = True,
+    warnings: list[str] | None = None,
+) -> dict[str, object]:
+    warnings = warnings if warnings is not None else []
     laterality = {"R": "Right", "L": "Left"}.get(str(getattr(dataset, "Laterality", "")))
     if laterality is None:
         raise InvalidHFADataError("Laterality must be R or L.")
@@ -159,7 +169,7 @@ def _metadata(dataset: Dataset, field_size: str, strategy: str, *, include_globa
                 "md": _number(getattr(results, "GlobalDeviationFromNormal", None)),
                 "psd": _number(getattr(results, "LocalizedDeviationFromNormal", None)),
                 "vfi": _vfi(dataset),
-                "ght": _ght(dataset),
+                "ght": _ght(dataset, warnings),
             }
         )
     return metadata
@@ -253,7 +263,13 @@ def _vfi(dataset: Dataset) -> int | None:
     return None
 
 
-def _ght(dataset: Dataset) -> str | None:
+def _ght(dataset: Dataset, warnings: list[str]) -> str | None:
+    """Return the GHT result label, or None with a warning for an unknown code.
+
+    GHT is one metadata field, so an unrecognised result code (for example
+    from a newer device firmware) leaves GHT blank rather than rejecting the
+    whole test.
+    """
     for index in _sequence(dataset, "VisualFieldGlobalResultsIndexSequence"):
         observation = _first(_sequence(index, "DataObservationSequence"))
         concept = _first(_sequence(observation, "ConceptNameCodeSequence"))
@@ -264,7 +280,9 @@ def _ght(dataset: Dataset) -> str | None:
         code = str(getattr(result, "CodingSchemeDesignator", "")), str(getattr(result, "CodeValue", ""))
         value = GHT_RESULT_CODES.get(code)
         if value is None:
-            raise UnsupportedHFADataError(f"Unsupported Glaucoma Hemifield Test result code {code!r}.")
+            meaning = str(getattr(result, "CodeMeaning", ""))
+            described = f" ({meaning!r})" if meaning else ""
+            warnings.append(f"Unrecognised Glaucoma Hemifield Test result code {code[0]}:{code[1]}{described}; GHT left blank.")
         return value
     return None
 

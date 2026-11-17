@@ -44,6 +44,8 @@ raw_sensitivity = result.raw.at(-3.0, 21.0)
 
 `ThresholdResult` represents Full Threshold 3-in-1 Macula measurements, which do not include normative/deviation analyses. Its `points` mapping is keyed by source coordinate and contains immutable `ThresholdPoint` values with `sensitivity`, `stimulus_result`, `retest_seen`, and `retest_sensitivity` fields. `sensitivity` is `None` when a point has no `SensitivityValue`; the rest of the result is still returned, so callers decide how to report the gap. `ThresholdResult.coordinates` and `ThresholdResult.at(x, y)` provide the equivalent coordinate accessors.
 
+Both result types have a `warnings` tuple of strings, empty by default. It lists problems that left a field blank without rejecting the test, so callers can report them. Currently the only warning is for an unrecognised Glaucoma Hemifield Test result code.
+
 The current parser preserves DICOM numeric values directly:
 
 - `raw`, `tdv`, and `pdv` are integer values or `None` when a value is absent.
@@ -67,7 +69,7 @@ The current parser preserves DICOM numeric values directly:
 | `refraction` | mapping with `sphere`, `cylinder`, and `axis` |
 | `md`, `psd` | float or `None` |
 | `vfi` | integer percentage value, read from the global-results observation with concept code `DCM 111852` (Visual Field Index); `None` when absent, as for 10-2 tests |
-| `ght` | `Abnormally High`, `Borderline`, `Borderline / General Reduction`, `General Reduction of Sensitivity`, `WNL`, `ONL`, or `None` when no GHT result is present |
+| `ght` | `Abnormally High`, `Borderline`, `Borderline / General Reduction`, `General Reduction of Sensitivity`, `WNL`, `ONL`, or `None` when no GHT result is present. An unrecognised result code also gives `None`, with a warning naming the code (for example `DCM:111999`) in `warnings` |
 
 Patient name, identifier, and date of birth are intentionally not part of this API.
 
@@ -102,7 +104,7 @@ SITA pattern and strategy code recognition is independent: the parser accepts an
 
 Pattern-deviation values must be present for `HFAResult`. Full Threshold 3-in-1 Macula is recognised only as the combination of the Macula pattern code (`111804`) and Full Threshold strategy code (`111818`), and returns a `ThresholdResult`. Macula paired with another strategy is rejected.
 
-Full Threshold 10-2, 24-2, and 30-2 objects are ambiguous: OPV measurement storage has no indicator of whether they are 3-in-1 tests. The parser logs a warning containing “contact admin” and raises `UnsupportedHFADataError` rather than silently classify them. Esterman remains explicitly rejected. An unsupported SOP class, protocol code, Glaucoma Hemifield Test result code, or absent pattern-deviation data raises `UnsupportedHFADataError`: the test type is out of scope.
+Full Threshold 10-2, 24-2, and 30-2 objects are ambiguous: OPV measurement storage has no indicator of whether they are 3-in-1 tests. The parser logs a warning containing “contact admin” and raises `UnsupportedHFADataError` rather than silently classify them. Esterman remains explicitly rejected. An unsupported SOP class, protocol code, or absent pattern-deviation data raises `UnsupportedHFADataError`: the test type is out of scope. An unrecognised Glaucoma Hemifield Test result code does not reject the test; see `ght` under [Metadata](#metadata).
 
 Problems with the data of an otherwise supported test raise `InvalidHFADataError`, a subclass of `UnsupportedHFADataError`. These include a duplicate or missing coordinate, an empty test-point sequence, a point without its normals sequence, an invalid `StimulusResults` or `RetestStimulusSeen` value, a malformed numeric value or study date, laterality other than R or L, and a missing `FovealSensitivity` when it is marked as measured. Catch `InvalidHFADataError` first to tell a data problem apart from an unsupported test type; existing `UnsupportedHFADataError` handlers catch both.
 
